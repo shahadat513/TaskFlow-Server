@@ -6,7 +6,6 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -22,49 +21,58 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
-        // await client.connect();
         console.log("Connected to MongoDB!");
 
         const database = client.db("TaskFlow");
         const tasksCollection = database.collection("TaskCollection");
 
-        // Get all tasks
         app.get("/tasks", async (req, res) => {
             try {
                 const tasks = await tasksCollection.find().toArray();
                 res.send(tasks);
             } catch (error) {
-                console.error("Error fetching tasks:", error);
                 res.status(500).send({ message: "Error fetching tasks", success: false });
             }
         });
 
-        // Add new task
         app.post("/tasks", async (req, res) => {
             try {
                 const task = req.body;
                 const result = await tasksCollection.insertOne(task);
                 res.send({ message: "Task added successfully", success: true, insertedId: result.insertedId });
             } catch (error) {
-                console.error("Error adding task:", error);
                 res.status(500).send({ message: "Error adding task", success: false });
             }
         });
 
-        // Update task status (using PATCH)
-        app.patch("/tasks/:id", async (req, res) => {
+        // Update task (title, description, and status)
+        app.put("/tasks/:id", async (req, res) => {
             const id = req.params.id;
-            const { status } = req.body;
+            const { title, description, status } = req.body;
 
-            // Validate the ObjectId
+            // Validate the ID
             if (!ObjectId.isValid(id)) {
                 return res.status(400).send({ message: "Invalid task ID", success: false });
             }
 
+            // Ensure at least one field is provided for update
+            if (!title && !description && !status) {
+                return res.status(400).send({
+                    message: "At least one field (title, description, or status) is required.",
+                    success: false,
+                });
+            }
+
+            // Only update provided fields
+            const updateFields = {};
+            if (title) updateFields.title = title;
+            if (description) updateFields.description = description;
+            if (status) updateFields.status = status;
+
             try {
                 const result = await tasksCollection.updateOne(
                     { _id: new ObjectId(id) },
-                    { $set: { status } }
+                    { $set: updateFields }
                 );
 
                 if (result.modifiedCount > 0) {
@@ -78,11 +86,9 @@ async function run() {
             }
         });
 
-        // Delete task
         app.delete("/tasks/:id", async (req, res) => {
             const id = req.params.id;
 
-            // Validate the ObjectId
             if (!ObjectId.isValid(id)) {
                 return res.status(400).send({ message: "Invalid task ID", success: false });
             }
@@ -96,7 +102,6 @@ async function run() {
                     res.status(404).send({ message: "Task not found", success: false });
                 }
             } catch (error) {
-                console.error("Error deleting task:", error);
                 res.status(500).send({ message: "Error deleting task", success: false });
             }
         });
@@ -105,6 +110,7 @@ async function run() {
         console.error("Database connection error:", error);
     }
 }
+
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
